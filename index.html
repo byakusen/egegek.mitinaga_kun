@@ -105,15 +105,24 @@
     border:5px solid var(--kin);
     box-shadow:0 0 0 4px var(--murasaki),0 10px 30px rgba(0,0,0,.5);
     position:relative;
-    transition:transform .25s;
+    /* 顔そのものは動かさない（縦揺れ・横揺れを防ぐため） */
   }
-  .face img{
+  /* 口（顔）の絵。閉じた絵と開いた絵を、ぴったり同じ位置に重ねる */
+  .face .mouth{
+    position:absolute;
+    inset:0;
     width:100%;height:100%;
     object-fit:cover;
     display:block;
   }
+  .face .mouth.closed{ z-index:1; }            /* 閉じた口…いつも見えている */
+  .face .mouth.open{ z-index:2; opacity:0; }   /* 開いた口…ふだんは透明 */
+  /* 「talking-open」がついた瞬間だけ、開いた口の絵が見える */
+  .face.talking-open .mouth.open{ opacity:1; }
+  .face.no-img .mouth{ display:none; }
   .face-fallback{
     display:none;
+    position:absolute;inset:0;z-index:3;
     width:100%;height:100%;
     align-items:center;justify-content:center;
     font-family:'Yuji Syuku',serif;
@@ -122,8 +131,6 @@
     background:radial-gradient(circle at 50% 38%, #3b2c52, #241a33);
   }
   .face.no-img .face-fallback{display:flex;}
-  .face.talk{animation:nod .6s ease;}
-  @keyframes nod{0%,100%{transform:translateY(0)}30%{transform:translateY(6px) rotate(-2deg)}60%{transform:translateY(0) rotate(2deg)}}
   .name-tag{
     margin-top:10px;font-family:'Yuji Syuku',serif;
     font-size:clamp(16px,2vw,24px);color:var(--kin-akarui);letter-spacing:.1em;
@@ -358,8 +365,14 @@
       <div class="stage">
         <div class="michinaga">
           <div class="face" id="face">
-            <img src="https://raw.githubusercontent.com/byakusen/egegek.mitinaga_kun/main/mitinaga_kun.png" alt="藤原道長"
-                 onerror="this.style.display='none';this.parentNode.classList.add('no-img');">
+            <img class="mouth closed"
+                 src="https://raw.githubusercontent.com/byakusen/egegek.mitinaga_kun/main/mitinaga_kun.png"
+                 alt="藤原道長（口を閉じた絵）"
+                 onerror="this.closest('.face').classList.add('no-img');">
+            <img class="mouth open"
+                 src="https://raw.githubusercontent.com/byakusen/egegek.mitinaga_kun/main/mitinaga2.png"
+                 alt="" aria-hidden="true"
+                 onerror="this.style.display='none';">
             <span class="face-fallback">藤<br>原<br>道<br>長</span>
           </div>
           <div class="name-tag">藤原道長</div>
@@ -767,20 +780,34 @@ const NOT_FOUND = [
 
 const GREET = "やあ、わたしが藤原道長じゃ。平安の世を生きた貴族よ。聞きたいことを下のますに入力して、リターンを押すか「きく」ボタンを押すがよい。望月の歌のことも、娘たちのことも、なんでも答えてやろうぞ。";
 
-// ===== タイプライター表示 =====
+// ===== タイプライター表示 ＋ 口パク =====
 const answerEl = document.getElementById('answer');
 const faceEl = document.getElementById('face');
 let typing=null;
+let mouthTimer=null;
+
+// 口を動かしはじめる（しゃべりはじめ）
+function startMouth(){
+  stopMouth();  // 念のため、前のうごきを止めてから始める
+  // 130ミリ秒ごとに「talking-open」を付けたり外したりして、開いた口と閉じた口を切りかえる
+  mouthTimer=setInterval(()=>{ faceEl.classList.toggle('talking-open'); },130);
+}
+// 口を止める（しゃべりおわり）
+function stopMouth(){
+  if(mouthTimer){ clearInterval(mouthTimer); mouthTimer=null; }
+  faceEl.classList.remove('talking-open');  // 最後は口を閉じた絵にもどす
+}
+
 function speak(text){
-  faceEl.classList.remove('talk'); void faceEl.offsetWidth; faceEl.classList.add('talk');
   if(typing) clearInterval(typing);
+  startMouth();                 // 文字を出している間、口を動かす
   answerEl.innerHTML="";
   let i=0;
   const cursor=document.createElement('span');
   cursor.className='cursor'; cursor.textContent='　';
   answerEl.appendChild(cursor);
   typing=setInterval(()=>{
-    if(i>=text.length){clearInterval(typing); cursor.remove(); return;}
+    if(i>=text.length){clearInterval(typing); cursor.remove(); stopMouth(); return;}  // 表示し終わったら口を止める
     const ch=document.createTextNode(text[i]);
     answerEl.insertBefore(ch,cursor);
     i++;
